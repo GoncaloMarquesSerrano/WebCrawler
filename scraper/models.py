@@ -1,11 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (
-    Integer,
-    String,
     Text,
-    DateTime,
-    Float,
-    Boolean,
     ForeignKey,
     Index,
 )
@@ -22,15 +17,15 @@ class CrawlJob(Base):
     __tablename__ = "crawl_jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    domain: Mapped[str] = mapped_column(String(512), nullable=False)
-    seed_url: Mapped[str] = mapped_column(String(2048), nullable=False)
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    finished_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    domain: Mapped[str] = mapped_column(nullable=False)
+    seed_url: Mapped[str] = mapped_column(nullable=False)
+    started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    finished_at: Mapped[datetime] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(
-        String(50), default="pending"
+        default="pending"
     )  # 'running', 'done', 'cancelled'
-    max_depth: Mapped[int] = mapped_column(Integer, default=3)
-    max_pages: Mapped[int] = mapped_column(Integer, default=500)
+    max_depth: Mapped[int] = mapped_column(default=3)
+    max_pages: Mapped[int] = mapped_column(default=500)
 
     pages: Mapped[list["Page"]] = relationship("Page", back_populates="crawl_job")
 
@@ -42,22 +37,20 @@ class Page(Base):
     __tablename__ = "pages"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    job_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("crawl_jobs.id"), nullable=False
-    )
-    url: Mapped[str] = mapped_column(String(2048), nullable=False)
-    status_code: Mapped[int] = mapped_column(Integer, nullable=True)
-    title: Mapped[str] = mapped_column(String(512), nullable=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("crawl_jobs.id"), nullable=False)
+    url: Mapped[str] = mapped_column(nullable=False)
+    status_code: Mapped[int] = mapped_column(nullable=True)
+    title: Mapped[str] = mapped_column(nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=True)
-    depth: Mapped[int] = mapped_column(Integer, default=0)
-    crawled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    redirected_from: Mapped[str] = mapped_column(String(2048), nullable=True)
+    depth: Mapped[int] = mapped_column(default=0)
+    crawled_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    redirected_from: Mapped[str] = mapped_column(nullable=True)
     error: Mapped[str] = mapped_column(Text, nullable=True)
     is_javascript: Mapped[bool] = mapped_column(
-        Boolean, default=False
+        default=False
     )  # crawled with Playwright?
-    load_time_ms: Mapped[float] = mapped_column(Float, nullable=True)
+    load_time_ms: Mapped[float] = mapped_column(nullable=True)
 
     job: Mapped["CrawlJob"] = relationship("CrawlJob", back_populates="pages")
     links: Mapped[list["Link"]] = relationship(
@@ -74,12 +67,10 @@ class Link(Base):
     __tablename__ = "links"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    source_page_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("pages.id"), nullable=False
-    )
-    target_url: Mapped[str] = mapped_column(String(2048), nullable=False)
-    anchor_text: Mapped[str] = mapped_column(String(512), nullable=True)
-    is_external: Mapped[bool] = mapped_column(Boolean, default=False)
+    source_page_id: Mapped[int] = mapped_column(ForeignKey("pages.id"), nullable=False)
+    target_url: Mapped[str] = mapped_column(nullable=False)
+    anchor_text: Mapped[str] = mapped_column(nullable=True)
+    is_external: Mapped[bool] = mapped_column(default=False)
 
     source_page: Mapped["Page"] = relationship(
         "Page", foreign_keys=[source_page_id], back_populates="links"
@@ -93,14 +84,12 @@ class Queue(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     crawl_job_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("crawl_jobs.id"), nullable=False
+        ForeignKey("crawl_jobs.id"), nullable=False
     )
-    url: Mapped[str] = mapped_column(String(2048), nullable=False)
-    depth: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(
-        String(50), default="pending"
-    )  # 'pending', done', 'failed'
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    url: Mapped[str] = mapped_column(nullable=False)
+    depth: Mapped[int] = mapped_column(default=0)
+    status: Mapped[str] = mapped_column(default="pending")  # 'pending', done', 'failed'
+    added_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     __table_args__ = (
         Index("ix_queue_job_url", "crawl_job_id", "url", unique=True),
