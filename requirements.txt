@@ -1,0 +1,13 @@
+httpx==0.28.1
+beautifulsoup4==4.12.3
+playwright>=1.49.0
+sqlalchemy==2.0.48
+aiosqlite==0.22.1
+greenlet>=3.1.0
+pandas==2.2.3
+openpyxl==3.1.5
+streamlit==1.55.0
+protego==0.3.1
+rich==14.3.3
+typer==0.24.1
+anyio==4.13.0
