@@ -27,4 +27,3 @@ async def save_links(session, page_id: int, links: set[tuple[str, str]], base_do
             is_external=is_external,
         )
         session.add(link)
-    await session.commit()
