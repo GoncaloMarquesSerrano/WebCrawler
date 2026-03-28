@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Text,
     ForeignKey,
@@ -19,7 +19,9 @@ class CrawlJob(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     domain: Mapped[str] = mapped_column(nullable=False)
     seed_url: Mapped[str] = mapped_column(nullable=False)
-    started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc)
+    )
     finished_at: Mapped[datetime] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(
         default="pending"
@@ -44,7 +46,9 @@ class Page(Base):
     description: Mapped[str] = mapped_column(Text, nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=True)
     depth: Mapped[int] = mapped_column(default=0)
-    crawled_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    crawled_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc)
+    )
     redirected_from: Mapped[str] = mapped_column(nullable=True)
     error: Mapped[str] = mapped_column(Text, nullable=True)
     is_javascript: Mapped[bool] = mapped_column(
@@ -89,7 +93,9 @@ class Queue(Base):
     url: Mapped[str] = mapped_column(nullable=False)
     depth: Mapped[int] = mapped_column(default=0)
     status: Mapped[str] = mapped_column(default="pending")  # 'pending', done', 'failed'
-    added_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    added_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc)
+    )
 
     __table_args__ = (
         Index("ix_queue_job_url", "crawl_job_id", "url", unique=True),
