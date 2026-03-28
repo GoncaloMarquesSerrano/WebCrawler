@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 
-from rich.markdown import Link
+from ..models import Link
 
 
 def extract_links(html: str, base_url: str):
