@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 async def crawl_static_page(url: str, session, job_id: int, depth: int):
     try:
-        async_client = httpx.AsyncClient()
+        async_client = httpx.AsyncClient(verify=False)
         async with async_client as client:
             html_response = await client.get(url, timeout=10.0)
         soup = BeautifulSoup(html_response.text, "html.parser")
@@ -34,6 +34,7 @@ async def crawl_static_page(url: str, session, job_id: int, depth: int):
         session.add(page)
         return page
     except Exception as e:
+        print(f"Erro: {e}")
         page = Page(job_id=job_id, url=url, depth=depth, error=str(e))
         session.add(page)
         return page
