@@ -17,14 +17,17 @@ async def get_data_for_export(session: AsyncSession, crawl_job_id: int):
     page_data = page_query.fetchall()
     link_data = link_query.fetchall()
     df = pd.DataFrame(page_data, columns=["page_url", "title", "description", "status_code", "error", "body"])
+    df.loc[:, "body"] = df["body"].str.replace(r'\s+', ' ', regex=True).str.strip()
     link_df = pd.DataFrame(link_data, columns=["target_url", "anchor_text"])
+    link_df.loc[:, "anchor_text"] = link_df["anchor_text"].str.replace(r'\s+', ' ', regex=True).str.strip()
+
     return df, link_df
 
 
 async def export_to_csv(session: AsyncSession, crawl_job_id: int, output_file: str) -> None:
     df, link_df = await get_data_for_export(session, crawl_job_id)
-    df.to_csv(output_file, index=False)
-    link_df.to_csv(output_file.replace(".csv", "_links.csv"), index=False)
+    df.to_csv(output_file, index=False, lineterminator="\r\n")
+    link_df.to_csv(output_file.replace(".csv", "_links.csv"), index=False, lineterminator="\r\n")
     print(f"Exported crawl results to {output_file}")
     
 async def export_to_excel(session: AsyncSession, crawl_job_id: int, output_file: str) -> None:

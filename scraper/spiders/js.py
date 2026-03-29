@@ -18,7 +18,7 @@ async def crawl_js_page(url: str, session, job_id: int, depth: int, browser) -> 
             ["script", "style", "noscript", "nav", "header", "footer", "aside"]
         ):
             tag.decompose()
-        body = soup.get_text(separator="\n").strip()
+        body = " ".join(soup.get_text(separator="\n").split())
         if response.url != url:
             url = response.url
         redirected = response.request.redirected_from

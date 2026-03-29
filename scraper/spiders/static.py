@@ -13,7 +13,7 @@ async def crawl_static_page(url: str, session, job_id: int, depth: int, client: 
             ["script", "style", "noscript", "nav", "header", "footer", "aside"]
         ):
             tag.decompose()
-        body = soup.get_text(separator="\n").strip()
+        body = " ".join(soup.get_text(separator="\n").split())
         page = Page(
             job_id=job_id,
             url=url,
