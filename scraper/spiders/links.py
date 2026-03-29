@@ -4,7 +4,7 @@ from urllib.parse import urljoin, urlparse
 from ..models import Link
 
 
-def extract_links(html: str, base_url: str):
+def extract_links(html: str, base_url: str) -> set[tuple[str, str]]:
     soup = BeautifulSoup(html, "html.parser")
     link_pairs = set()
     for a_tag in soup.find_all("a", href=True):
@@ -17,7 +17,7 @@ def extract_links(html: str, base_url: str):
         link_pairs.add((href, anchor_text))
     return link_pairs
 
-async def save_links(session, page_id: int, links: set[tuple[str, str]], base_domain: str):
+async def save_links(session, page_id: int, links: set[tuple[str, str]], base_domain: str) -> None:
     for target_url, anchor_text in links:
         is_external = urlparse(target_url).netloc != base_domain
         link = Link(

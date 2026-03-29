@@ -3,11 +3,9 @@ import httpx
 from bs4 import BeautifulSoup
 
 
-async def crawl_static_page(url: str, session, job_id: int, depth: int):
+async def crawl_static_page(url: str, session, job_id: int, depth: int, client: httpx.AsyncClient) -> Page:
     try:
-        async_client = httpx.AsyncClient(verify=False)
-        async with async_client as client:
-            html_response = await client.get(url, timeout=10.0)
+        html_response = await client.get(url, timeout=10.0)
         soup = BeautifulSoup(html_response.text, "html.parser")
         title = soup.title.get_text(strip=True) if soup.title else None
         description = soup.find("meta", attrs={"name": "description"})
@@ -24,17 +22,17 @@ async def crawl_static_page(url: str, session, job_id: int, depth: int):
             description=description["content"].strip() if description else None,
             body=body,
             depth=depth,
-            redirected_from=html_response.history[0].url
-            if html_response.history
-            else None,
+            redirected_from=str(html_response.history[0].url) if html_response.history else None,
             error=None,
             is_javascript=False,
             load_time_ms=html_response.elapsed.total_seconds() * 1000,
         )
         session.add(page)
+        await session.flush()  
         return page
     except Exception as e:
         print(f"Erro: {e}")
         page = Page(job_id=job_id, url=url, depth=depth, error=str(e))
         session.add(page)
+        await session.flush()
         return page

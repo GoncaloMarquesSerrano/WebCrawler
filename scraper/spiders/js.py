@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import time
 
 
-async def crawl_js_page(url: str, session, job_id: int, depth: int, browser):
+async def crawl_js_page(url: str, session, job_id: int, depth: int, browser) -> Page:
     page = await browser.new_page()
     try:
         t0 = time.monotonic()
@@ -36,10 +36,12 @@ async def crawl_js_page(url: str, session, job_id: int, depth: int, browser):
             load_time_ms=load_time_ms,
         )
         session.add(crawl_page)
+        await session.flush()  
         return crawl_page
     except Exception as e:
         crawl_page = Page(job_id=job_id, url=url, depth=depth, error=str(e))
         session.add(crawl_page)
+        await session.flush()
         return crawl_page
     finally:
         await page.close()
