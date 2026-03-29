@@ -29,7 +29,7 @@ class CrawlJob(Base):
     max_depth: Mapped[int] = mapped_column(default=3)
     max_pages: Mapped[int] = mapped_column(default=500)
 
-    pages: Mapped[list["Page"]] = relationship("Page", back_populates="crawl_job")
+    pages: Mapped[list["Page"]] = relationship("Page", back_populates="job")
 
     def __repr__(self):
         return f"<CrawlJob(id={self.id}, domain='{self.domain}', seed_url='{self.seed_url}', status='{self.status}')>"
