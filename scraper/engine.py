@@ -43,12 +43,13 @@ async def initialize_crawl(seed_url: str, session) -> CrawlJob:
         return None
     return crawl_job
 
-async def run_crawl(seed_url: str, session):
+async def run_crawl(seed_url: str, session, max_depth: int) -> None:
     job = await initialize_crawl(seed_url, session)
     if job is None:
         print("Failed to initialize crawl job.")
         return
     job.status = "running"
+    job.max_depth = max_depth  # Set the maximum depth for the crawl job
     job_id = job.id
     session.add(job)
     await session.commit()
