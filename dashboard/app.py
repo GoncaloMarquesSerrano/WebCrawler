@@ -292,6 +292,11 @@ def to_csv_bytes(df: pd.DataFrame) -> bytes:
 
 
 def to_excel_bytes(pages_df: pd.DataFrame, links_df: pd.DataFrame) -> bytes:
+    pages_df = pages_df.copy()
+
+    if "crawled_at" in pages_df.columns:
+        pages_df["crawled_at"] = pages_df["crawled_at"].dt.tz_localize(None)
+
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         pages_df.to_excel(writer, sheet_name="Pages", index=False)
