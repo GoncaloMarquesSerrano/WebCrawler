@@ -7,9 +7,11 @@ _engine = None
 _session_factory = None
 
 
-async def init_db(db_path: str = "data/crawl_data.db") -> create_async_engine:
+async def init_db():
     global _engine, _session_factory
-    _engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}", echo=False)
+    _engine = create_async_engine(
+        "postgresql+asyncpg://crawler:crawler@localhost:5432/crawler", echo=False
+    )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -22,5 +24,7 @@ def get_session_factory() -> async_sessionmaker:
     return _session_factory
 
 
-def get_sync_engine(db_path: str = "data/crawl_data.db") -> create_engine:
-    return create_engine(f"sqlite:///{db_path}", echo=False)
+def get_sync_engine():
+    return create_engine(
+        "postgresql://crawler:crawler@localhost:5432/crawler", echo=False
+    )
