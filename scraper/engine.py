@@ -53,10 +53,10 @@ async def worker(
             queue_item = await get_and_lock_queue_item(session, job.id)
             if queue_item is None:
                 consecutive_empty_checks += 1
-                print(f"{name} queue empty, retry {consecutive_empty_checks}/10")
+                print(f"{name} queue empty, retry {consecutive_empty_checks}/30")
                 if (
-                    consecutive_empty_checks >= 10
-                ):  # 3 tries with no items before exiting
+                    consecutive_empty_checks >= 30
+                ):  # 30 tries with no items before exiting
                     break
                 await asyncio.sleep(0.5)
                 continue
