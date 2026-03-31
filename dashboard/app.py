@@ -17,17 +17,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 from scraper.models import Base, CrawlJob, Link, Page
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-DB_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "data", "crawl_data.db"
-)
-DB_PATH = os.path.normpath(DB_PATH)
 
-DB_URL = os.environ.get("CRAWLER_DB_URL", f"sqlite+aiosqlite:///{DB_PATH}")
+DB_URL = "postgresql+asyncpg://crawler:crawler@localhost:5432/crawler"
 
 st.set_page_config(
     page_title="WebCrawler Dashboard",
@@ -140,12 +137,7 @@ st.markdown(
 
 @st.cache_resource
 def get_engine():
-    # Cria tabelas via engine síncrono (evita o problema do event loop)
-    sync_url = DB_URL.replace("sqlite+aiosqlite", "sqlite")
-    sync_engine = create_engine(sync_url)
-    sync_engine.dispose()
-
-    return create_async_engine(DB_URL, echo=False)
+    return create_async_engine(DB_URL, echo=False, poolclass=NullPool)
 
 
 def get_session_factory():
