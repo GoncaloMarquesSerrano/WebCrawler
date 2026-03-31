@@ -1,20 +1,24 @@
 # WebCrawler
 
-A Python web crawler built for exploration purposes. It crawls websites within a given domain, stores structured data in a local database, and provides both a CLI and an interactive dashboard for inspection and export.
+A Python web crawler built for exploration purposes. It crawls websites within a given domain, stores structured data in a database, and provides both a CLI and an interactive dashboard for inspection and export.
 
 ---
 
 ## Features
 
-- **Domain-restricted crawling** — stays within the seed domain to avoid runaway traversal
-- **Configurable depth** — control how deep the crawler goes via CLI flag
-- **robots.txt compliance** — respects crawl delays and disallow rules using `Protego`
-- **JS detection heuristics** — identifies pages that require JavaScript rendering
-- **Playwright support** — renders JS-heavy pages when needed
-- **Async engine** — built on `asyncio` + `httpx` with a shared `AsyncClient` for efficiency
-- **Persistent storage** — SQLAlchemy 2.0 async (aiosqlite) for local SQLite storage
-- **Export** — results exportable to CSV or Excel (`.xlsx`) per crawl job
-- **Streamlit dashboard** — visual interface to browse and inspect crawl results
+* **Domain-restricted crawling** — stays within the seed domain to avoid runaway traversal
+* **Configurable depth** — control how deep the crawler goes via CLI flag
+* **Configurable concurrency** — multi-worker async crawling with queue locking
+* **robots.txt compliance** — respects crawl delays and disallow rules using `Protego`
+* **JS detection heuristics** — identifies pages that require JavaScript rendering
+* **Playwright support** — renders JS-heavy pages when needed
+* **Hybrid crawling** — automatically switches between static and JS rendering
+* **Async engine** — built on `asyncio` + `httpx` with a shared `AsyncClient` for efficiency
+* **Persistent queue system** — database-backed queue with row-level locking (`FOR UPDATE SKIP LOCKED`)
+* **Persistent storage** — SQLAlchemy 2.0 async with PostgreSQL
+* **Export** — results exportable to CSV or Excel (`.xlsx`) per crawl job
+* **Streamlit dashboard** — visual interface to browse and inspect crawl results
+* **Error tracking** — stores crawl failures and HTTP errors for inspection
 
 ---
 
@@ -23,10 +27,11 @@ A Python web crawler built for exploration purposes. It crawls websites within a
 ```
 WebCrawler/
 ├── scraper/
-│   ├── engine.py        # Core crawl logic
+│   ├── engine.py        # Core crawl logic (workers, queue, orchestration)
 │   ├── db.py            # DB init and session factory (SQLAlchemy async)
-│   ├── models.py        # ORM models
+│   ├── models.py        # ORM models (Page, Link, Queue, CrawlJob)
 │   ├── exporter.py      # CSV and Excel export
+│   ├── spiders/         # Crawling strategies (static + JS)
 │   └── ...
 ├── dashboard/
 │   └── app.py           # Streamlit dashboard
@@ -49,17 +54,62 @@ pip install -r requirements.txt
 
 ---
 
+## Database Setup (PostgreSQL + Docker)
+
+This project uses PostgreSQL running in Docker.
+
+### 1. Run PostgreSQL container
+
+```bash
+docker run --name crawler-db \ 
+  -e POSTGRES_PASSWORD=crawler \
+  -e POSTGRES_DB=crawler \
+  -e POSTGRES_USER=crawler \
+  -p 5432:5432 \
+  -d postgres
+```
+
+---
+
+### 2. Connection string
+
+Default connection used in the project:
+
+```bash
+postgresql+asyncpg://crawler:crawler@localhost:5432/crawler
+```
+
+You can change it in:
+
+```
+scraper/db.py
+dashboard/app.py
+```
+
+---
+
+### 3. Initialize database
+
+Tables are created automatically on first run:
+
+```python
+init_db()
+```
+
+---
+
 ## Usage
 
 ### Crawl a website
 
 ```bash
-python main.py crawl https://example.com --depth 3
+python main.py crawl https://example.com --depth 3 --workers 5
 ```
 
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--depth` | `-d` | `3` | Maximum crawl depth |
+| Option      | Short | Default | Description                  |
+| ----------- | ----- | ------- | ---------------------------- |
+| `--depth`   | `-d`  | `3`     | Maximum crawl depth          |
+| `--workers` | `-w`  | `5`     | Number of concurrent workers |
 
 ---
 
@@ -85,25 +135,27 @@ streamlit run dashboard/app.py
 
 ## Tech Stack
 
-| Layer | Library |
-|---|---|
-| CLI | [Typer](https://typer.tiangolo.com/) + [Rich](https://github.com/Textualize/rich) |
-| HTTP | [httpx](https://www.python-httpx.org/) (async) |
-| JS rendering | [Playwright](https://playwright.dev/python/) |
-| HTML parsing | [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) |
-| robots.txt | [Protego](https://github.com/scrapy/protego) |
-| Database | SQLAlchemy 2.0 async + aiosqlite |
-| Export | pandas + openpyxl |
-| Dashboard | [Streamlit](https://streamlit.io/) |
+| Layer        | Library                                     |
+| ------------ | ------------------------------------------- |
+| CLI          | Typer + Rich                                |
+| HTTP         | httpx (async)                               |
+| JS rendering | Playwright                                  |
+| HTML parsing | BeautifulSoup4                              |
+| robots.txt   | Protego                                     |
+| Database     | SQLAlchemy 2.0 async + asyncpg (PostgreSQL) |
+| Export       | pandas + openpyxl                           |
+| Dashboard    | Streamlit                                   |
 
 ---
 
 ## Roadmap
 
-- [ ] Async concurrency with multiple workers
-- [ ] Full-text search over crawled pages
-- [ ] Inverted index / indexing pipeline
-- [ ] Relevance scoring
+* [x] Async concurrency with multiple workers
+* [x] PostgreSQL migration
+* [x] Streamlit dashboard
+* [ ] Full-text search over crawled pages
+* [ ] Inverted index / indexing pipeline
+* [ ] Relevance scoring
 
 ---
 
