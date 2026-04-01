@@ -53,6 +53,7 @@ async def worker(
     browser,
     async_client: httpx.AsyncClient,
     delay: float,
+    pages_crawled: dict,
 ):
     consecutive_empty_checks = 0
 
@@ -71,6 +72,10 @@ async def worker(
             consecutive_empty_checks = 0
             job_url = queue_item.url
             print(f"{name} processing: {job_url} at depth {queue_item.depth}")
+
+            if pages_crawled["count"] >= job.max_pages:
+                break
+            pages_crawled["count"] += 1
 
             if not await is_allowed(job_url):
                 print(f"URL disallowed by robots.txt: {job_url}")
@@ -174,6 +179,7 @@ async def run_crawl(
     max_depth: int,
     num_workers: int,
     delay: float,
+    max_pages: int,
 ) -> None:
     job = await initialize_crawl(seed_url, session)
     if job is None:
@@ -181,6 +187,7 @@ async def run_crawl(
         return
     job.status = "running"
     job.max_depth = max_depth  # Set the maximum depth for the crawl job
+    job.max_pages = max_pages  # Set the maximum pages for the crawl job
     session.add(job)
     await session.commit()
     playwright = await pw.async_playwright().start()
@@ -195,6 +202,7 @@ async def run_crawl(
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
+    pages_crawled = {"count": 0}
 
     tasks = [
         asyncio.create_task(
@@ -205,6 +213,7 @@ async def run_crawl(
                 browser,
                 async_client,
                 delay=delay,
+                pages_crawled=pages_crawled,
             )
         )
         for i in range(num_workers)  # Number of concurrent workers

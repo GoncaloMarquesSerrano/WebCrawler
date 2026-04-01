@@ -18,16 +18,19 @@ def crawl(
     delay: float = typer.Option(
         1.0, "--delay", "-dl", help="Delay between requests in seconds"
     ),
+    max_pages: int = typer.Option(
+        10000, "--max-pages", "-mp", help="Maximum number of pages to crawl"
+    ),
 ):
     print(f"Crawling {url} with depth {depth}")
-    asyncio.run(main(url, depth, num_workers, delay))
+    asyncio.run(main(url, depth, num_workers, delay, max_pages))
 
 
-async def main(url, depth, num_workers, delay):
+async def main(url, depth, num_workers, delay, max_pages):
     await init_db()
     session_factory = get_session_factory()
     async with session_factory() as session:
-        await run_crawl(url, session, depth, num_workers, delay)
+        await run_crawl(url, session, depth, num_workers, delay, max_pages)
 
 
 @app.command()
