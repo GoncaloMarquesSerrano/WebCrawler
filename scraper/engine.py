@@ -16,11 +16,12 @@ from sqlalchemy import func
 
 
 def is_js_rendered(html: str) -> bool:
-    soup = BeautifulSoup(html, "html.parser")
-    text = soup.get_text(strip=True)
-    if len(text) < 500:
-        return True
-    return "data-reactroot" in html or "data-vue-meta" in html
+    return (
+        "data-reactroot" in html
+        or "data-vue-meta" in html
+        or 'id="app"' in html
+        or "id=__next" in html
+    )
 
 
 async def initialize_crawl(seed_url: str, session) -> CrawlJob:
