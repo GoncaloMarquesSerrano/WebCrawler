@@ -10,6 +10,8 @@ from sqlalchemy import select
 import asyncio
 import playwright.async_api as pw
 from .db import get_session_factory
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import DBAPIError
 
 
 def is_js_rendered(html: str) -> bool:
@@ -53,10 +55,10 @@ async def worker(
             queue_item = await get_and_lock_queue_item(session, job.id)
             if queue_item is None:
                 consecutive_empty_checks += 1
-                print(f"{name} queue empty, retry {consecutive_empty_checks}/30")
+                print(f"{name} queue empty, retry {consecutive_empty_checks}/60")
                 if (
-                    consecutive_empty_checks >= 30
-                ):  # 30 tries with no items before exiting
+                    consecutive_empty_checks >= 60
+                ):  # 60 tries with no items before exiting
                     break
                 await asyncio.sleep(0.5)
                 continue
@@ -99,17 +101,35 @@ async def worker(
                 new_depth = queue_item.depth + 1
                 queue_item.status = "completed"
                 if new_depth <= job.max_depth:
-                    for link_url, _ in links:
-                        if urlparse(link_url).netloc != job.domain:
-                            continue
-                        if not await is_url_in_queue(session, job.id, link_url):
-                            new_queue_item = Queue(
-                                url=link_url,
-                                depth=new_depth,
-                                status="pending",
-                                crawl_job_id=job.id,
-                            )
-                            session.add(new_queue_item)
+                    sorted_links = sorted(
+                        set(
+                            link_url
+                            for link_url, _ in links
+                            if urlparse(link_url).netloc == job.domain
+                        )
+                    )
+
+                    for link_url in sorted_links:
+                        for attempt in range(3):  # 3 tries
+                            try:
+                                stmt = (
+                                    insert(Queue)
+                                    .values(
+                                        url=link_url,
+                                        depth=new_depth,
+                                        status="pending",
+                                        crawl_job_id=job.id,
+                                    )
+                                    .on_conflict_do_nothing(
+                                        index_elements=["crawl_job_id", "url"]
+                                    )
+                                )
+                                await session.execute(stmt)
+                                break  # success, leaves retry loop
+                            except DBAPIError:
+                                await session.rollback()
+                                await asyncio.sleep(0.1 * attempt)  # backoff
+                                continue
                     await session.commit()
                 else:
                     print(f"Max depth reached for {job_url}")
@@ -118,6 +138,7 @@ async def worker(
 
             except Exception as e:
                 print(f"Error crawling {job_url}: {e}")
+                await session.rollback()
                 queue_item.status = "failed"
                 session.add(queue_item)
                 await session.commit()
@@ -152,7 +173,16 @@ async def run_crawl(seed_url: str, session, max_depth: int, num_workers: int) ->
     await session.commit()
     playwright = await pw.async_playwright().start()
     browser = await playwright.chromium.launch(headless=True)
-    async_client = httpx.AsyncClient(verify=False, follow_redirects=True)
+    async_client = httpx.AsyncClient(
+        verify=False,
+        follow_redirects=True,
+        timeout=10.0,
+        headers={
+            "User-Agent": "GsCrawler/1.0 (https://github.com/GoncaloMarquesSerrano/WebCrawler; contact: gs42contact@gmail.com)",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
 
     tasks = [
         asyncio.create_task(
@@ -170,26 +200,3 @@ async def run_crawl(seed_url: str, session, max_depth: int, num_workers: int) ->
     job.status = "completed"
     session.add(job)
     await session.commit()
-
-
-async def is_queue_empty(session, job_id: int) -> bool:
-    result = await session.execute(
-        select(Queue).where(Queue.crawl_job_id == job_id, Queue.status == "pending")
-    )
-    return result.scalars().first() is None
-
-
-async def get_queue_item(session, job_id: int) -> Queue:
-    result = await session.execute(
-        select(Queue)
-        .where(Queue.crawl_job_id == job_id, Queue.status == "pending")
-        .order_by(Queue.id.asc())
-    )
-    return result.scalars().first()
-
-
-async def is_url_in_queue(session, job_id: int, url: str) -> bool:
-    result = await session.execute(
-        select(Queue).where(Queue.crawl_job_id == job_id, Queue.url == url)
-    )
-    return result.scalars().first() is not None
