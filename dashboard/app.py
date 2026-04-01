@@ -16,10 +16,10 @@ import streamlit as st
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+import re
 
-from scraper.models import Base, CrawlJob, Link, Page
+from scraper.models import CrawlJob, Link, Page
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -299,9 +299,17 @@ def to_excel_bytes(pages_df: pd.DataFrame, links_df: pd.DataFrame) -> bytes:
 
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        pages_df.to_excel(writer, sheet_name="Pages", index=False)
-        links_df.to_excel(writer, sheet_name="Links", index=False)
+        clean_illegal_chars(pages_df).to_excel(writer, sheet_name="Pages", index=False)
+        clean_illegal_chars(links_df).to_excel(writer, sheet_name="Links", index=False)
     return buf.getvalue()
+
+
+def clean_illegal_chars(df: pd.DataFrame) -> pd.DataFrame:
+    return df.map(
+        lambda x: (
+            re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", x) if isinstance(x, str) else x
+        )
+    )
 
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
