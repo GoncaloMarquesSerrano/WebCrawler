@@ -15,16 +15,19 @@ def crawl(
     num_workers: int = typer.Option(
         5, "--workers", "-w", help="Number of concurrent workers"
     ),
+    delay: float = typer.Option(
+        1.0, "--delay", "-dl", help="Delay between requests in seconds"
+    ),
 ):
     print(f"Crawling {url} with depth {depth}")
-    asyncio.run(main(url, depth, num_workers))
+    asyncio.run(main(url, depth, num_workers, delay))
 
 
-async def main(url, depth, num_workers):
+async def main(url, depth, num_workers, delay):
     await init_db()
     session_factory = get_session_factory()
     async with session_factory() as session:
-        await run_crawl(url, session, depth, num_workers)
+        await run_crawl(url, session, depth, num_workers, delay)
 
 
 @app.command()
@@ -65,4 +68,3 @@ async def export_excel_main(crawl_job_id, output_file):
 
 if __name__ == "__main__":
     app()
-

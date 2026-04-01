@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from .models import CrawlJob, Queue
-from .robots import is_allowed, get_crawl_delay
+from .robots import is_allowed
 from .spiders.static import crawl_static_page
 from .spiders.js import crawl_js_page
 from .spiders.links import extract_links, save_links
@@ -12,6 +12,7 @@ import playwright.async_api as pw
 from .db import get_session_factory
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy import func
 
 
 def is_js_rendered(html: str) -> bool:
@@ -46,7 +47,12 @@ async def initialize_crawl(seed_url: str, session) -> CrawlJob:
 
 
 async def worker(
-    name: str, job: CrawlJob, session_factory, browser, async_client: httpx.AsyncClient
+    name: str,
+    job: CrawlJob,
+    session_factory,
+    browser,
+    async_client: httpx.AsyncClient,
+    delay: float,
 ):
     consecutive_empty_checks = 0
 
@@ -73,7 +79,7 @@ async def worker(
                 await session.commit()
                 continue
 
-            crawl_delay = await get_crawl_delay(job_url)
+            crawl_delay = delay
             await asyncio.sleep(crawl_delay)
 
             try:
@@ -162,7 +168,13 @@ async def get_and_lock_queue_item(session, job_id: int) -> Queue:
     return item
 
 
-async def run_crawl(seed_url: str, session, max_depth: int, num_workers: int) -> None:
+async def run_crawl(
+    seed_url: str,
+    session,
+    max_depth: int,
+    num_workers: int,
+    delay: float,
+) -> None:
     job = await initialize_crawl(seed_url, session)
     if job is None:
         print("Failed to initialize crawl job.")
@@ -186,7 +198,14 @@ async def run_crawl(seed_url: str, session, max_depth: int, num_workers: int) ->
 
     tasks = [
         asyncio.create_task(
-            worker(f"Worker-{i + 1}", job, get_session_factory(), browser, async_client)
+            worker(
+                f"Worker-{i + 1}",
+                job,
+                get_session_factory(),
+                browser,
+                async_client,
+                delay=delay,
+            )
         )
         for i in range(num_workers)  # Number of concurrent workers
     ]
