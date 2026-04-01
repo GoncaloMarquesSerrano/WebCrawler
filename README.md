@@ -110,6 +110,8 @@ python main.py crawl https://example.com --depth 3 --workers 5
 | ----------- | ----- | ------- | ---------------------------- |
 | `--depth`   | `-d`  | `3`     | Maximum crawl depth          |
 | `--workers` | `-w`  | `5`     | Number of concurrent workers |
+| `--delay` | `-dl` | `1.0`   | Delay between requests in seconds |
+| `--max-pages` | `-mp` | `10000`   | Maximum number of pages to crawl |
 
 ---
 
