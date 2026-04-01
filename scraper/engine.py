@@ -224,6 +224,7 @@ async def run_crawl(
     await browser.close()
     await playwright.stop()
     await async_client.aclose()
+    job.finished_at = func.now()
 
     job.status = "completed"
     session.add(job)
