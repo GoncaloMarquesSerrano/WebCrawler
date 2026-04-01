@@ -300,7 +300,16 @@ def to_excel_bytes(pages_df: pd.DataFrame, links_df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         clean_illegal_chars(pages_df).to_excel(writer, sheet_name="Pages", index=False)
-        clean_illegal_chars(links_df).to_excel(writer, sheet_name="Links", index=False)
+
+        info = pd.DataFrame(
+            [
+                {
+                    "info": f"Links omitidos do Excel ({len(links_df):,} registos). "
+                    "Usa o botão 'CSV — Links' na sidebar para os exportar."
+                }
+            ]
+        )
+        info.to_excel(writer, sheet_name="Links", index=False)
     return buf.getvalue()
 
 
