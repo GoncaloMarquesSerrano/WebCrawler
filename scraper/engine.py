@@ -55,22 +55,23 @@ async def worker(
     async_client: httpx.AsyncClient,
     delay: float,
     pages_crawled: dict,
+    active_workers: dict,
 ):
-    consecutive_empty_checks = 0
 
     async with session_factory() as session:
         while True:
             queue_item = await get_and_lock_queue_item(session, job.id)
             if queue_item is None:
-                consecutive_empty_checks += 1
-                print(f"{name} queue empty, retry {consecutive_empty_checks}/60")
-                if (
-                    consecutive_empty_checks >= 60
-                ):  # 60 tries with no items before exiting
-                    break
-                await asyncio.sleep(0.5)
-                continue
-            consecutive_empty_checks = 0
+                active_workers["count"] -= 1
+                # waits for items or until all workers are idle
+                while active_workers["count"] > 0 and queue_item is None:
+                    await asyncio.sleep(0.5)
+                    queue_item = await get_and_lock_queue_item(session, job.id)
+
+                if queue_item is None:
+                    break  # No more items and all workers idle, exit loop
+                else:
+                    active_workers["count"] += 1  # back to processing
             job_url = queue_item.url
             print(f"{name} processing: {job_url} at depth {queue_item.depth}")
 
@@ -193,10 +194,14 @@ async def run_crawl(
     await session.commit()
     playwright = await pw.async_playwright().start()
     browser = await playwright.chromium.launch(headless=True)
+    limits = httpx.Limits(
+        max_connections=300, max_keepalive_connections=200
+    )  # Limit for concurrent HTTP requests
     async_client = httpx.AsyncClient(
         verify=False,
         follow_redirects=True,
         timeout=10.0,
+        limits=limits,
         headers={
             "User-Agent": "GsCrawler/1.0 (https://github.com/GoncaloMarquesSerrano/WebCrawler; contact: gs42contact@gmail.com)",
             "Accept": "text/html,application/xhtml+xml",
@@ -204,6 +209,9 @@ async def run_crawl(
         },
     )
     pages_crawled = {"count": 0}
+    active_workers = {
+        "count": num_workers
+    }  # Track active workers for better concurrency handling
 
     tasks = [
         asyncio.create_task(
@@ -215,6 +223,7 @@ async def run_crawl(
                 async_client,
                 delay=delay,
                 pages_crawled=pages_crawled,
+                active_workers=active_workers,
             )
         )
         for i in range(num_workers)  # Number of concurrent workers

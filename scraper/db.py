@@ -10,7 +10,10 @@ _session_factory = None
 async def init_db():
     global _engine, _session_factory
     _engine = create_async_engine(
-        "postgresql+asyncpg://crawler:crawler@localhost:5432/crawler", echo=False
+        "postgresql+asyncpg://crawler:crawler@localhost:5432/crawler",
+        echo=False,
+        pool_size=120,
+        max_overflow=20,
     )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     async with _engine.begin() as conn:
