@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 from .models import CrawlJob, Queue
-from .robots import is_allowed
+from .robots import is_allowed, get_crawl_delay, apply_domain_rate_limit
 from .spiders.static import crawl_static_page
 from .spiders.js import crawl_js_page
 from .spiders.links import extract_links, save_links
@@ -73,6 +73,8 @@ async def worker(
     delay: float,
     pages_crawled: dict,
     memory_queue: asyncio.Queue,
+    domain_last_request: dict,
+    domain_locks: dict,
 ):
 
     async with session_factory() as session:
@@ -104,8 +106,15 @@ async def worker(
                 await session.commit()
                 continue
 
-            crawl_delay = delay
-            await asyncio.sleep(crawl_delay)
+            robots_delay = await get_crawl_delay(job_url)
+            effective_delay = max(delay, robots_delay or 0)
+
+            await apply_domain_rate_limit(
+                job_url,
+                effective_delay,
+                domain_last_request,
+                domain_locks,
+            )
 
             try:
                 response = await async_client.get(job_url, timeout=10.0)
@@ -194,7 +203,7 @@ async def run_crawl(
     playwright = await pw.async_playwright().start()
     browser = await playwright.chromium.launch(headless=True)
     limits = httpx.Limits(
-        max_connections=300, max_keepalive_connections=200
+        max_connections=50, max_keepalive_connections=20
     )  # Limit for concurrent HTTP requests
     async_client = httpx.AsyncClient(
         verify=False,
@@ -209,6 +218,8 @@ async def run_crawl(
     )
     pages_crawled = {"count": 0}
     memory_queue = asyncio.Queue()  # In-memory queue for worker communication
+    domain_last_request = {}
+    domain_locks = {}
 
     producer_task = asyncio.create_task(producer(memory_queue, get_session_factory()))
 
@@ -223,6 +234,8 @@ async def run_crawl(
                 delay=delay,
                 pages_crawled=pages_crawled,
                 memory_queue=memory_queue,
+                domain_last_request=domain_last_request,
+                domain_locks=domain_locks,
             )
         )
         for i in range(num_workers)  # Number of concurrent workers
