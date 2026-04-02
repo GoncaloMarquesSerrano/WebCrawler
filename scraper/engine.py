@@ -75,6 +75,7 @@ async def worker(
     memory_queue: asyncio.Queue,
     domain_last_request: dict,
     domain_locks: dict,
+    js_semaphore: asyncio.Semaphore,
 ):
 
     async with session_factory() as session:
@@ -129,7 +130,12 @@ async def worker(
 
                 if is_js_rendered(response.text):
                     page = await crawl_js_page(
-                        job_url, session, job.id, queue_item.depth, browser
+                        job_url,
+                        session,
+                        job.id,
+                        queue_item.depth,
+                        browser,
+                        js_semaphore,
                     )
                 else:
                     page = await crawl_static_page(
@@ -220,6 +226,7 @@ async def run_crawl(
     memory_queue = asyncio.Queue()  # In-memory queue for worker communication
     domain_last_request = {}
     domain_locks = {}
+    js_semaphore = asyncio.Semaphore(5)  # Limit concurrent JS rendering
 
     producer_task = asyncio.create_task(producer(memory_queue, get_session_factory()))
 
@@ -236,6 +243,7 @@ async def run_crawl(
                 memory_queue=memory_queue,
                 domain_last_request=domain_last_request,
                 domain_locks=domain_locks,
+                js_semaphore=js_semaphore,
             )
         )
         for i in range(num_workers)  # Number of concurrent workers
