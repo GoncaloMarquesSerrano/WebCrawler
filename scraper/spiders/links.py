@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-
+from sqlalchemy.dialects.postgresql import insert
 from ..models import Link
 
 
@@ -17,13 +17,22 @@ def extract_links(html: str, base_url: str) -> set[tuple[str, str]]:
         link_pairs.add((href, anchor_text))
     return link_pairs
 
-async def save_links(session, page_id: int, links: set[tuple[str, str]], base_domain: str) -> None:
-    for target_url, anchor_text in links:
-        is_external = urlparse(target_url).netloc != base_domain
-        link = Link(
-            source_page_id=page_id,
-            target_url=target_url,
-            anchor_text=anchor_text,
-            is_external=is_external,
-        )
-        session.add(link)
+
+async def save_links(
+    session, page_id: int, links: set[tuple[str, str]], base_domain: str
+) -> None:
+    if not links:
+        return
+
+    await session.execute(
+        insert(Link).on_conflict_do_nothing(),
+        [
+            {
+                "source_page_id": page_id,
+                "target_url": target_url,
+                "anchor_text": anchor_text,
+                "is_external": urlparse(target_url).netloc != base_domain,
+            }
+            for target_url, anchor_text in links
+        ],
+    )
