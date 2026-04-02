@@ -45,6 +45,25 @@ async def initialize_crawl(seed_url: str, session) -> CrawlJob:
     return crawl_job
 
 
+async def producer(memory_queue: asyncio.Queue, session_factory):
+    async with session_factory() as session:
+        while True:
+            (url, depth, status, crawl_job_id) = await memory_queue.get()
+            try:
+                await session.execute(
+                    insert(Queue)
+                    .on_conflict_do_nothing(index_elements=["crawl_job_id", "url"])
+                    .values(
+                        url=url, depth=depth, status=status, crawl_job_id=crawl_job_id
+                    ),
+                )
+                await session.commit()
+            except Exception as e:
+                print(f"Producer error: {e}")
+            finally:
+                memory_queue.task_done()
+
+
 async def worker(
     name: str,
     job: CrawlJob,
@@ -53,23 +72,24 @@ async def worker(
     async_client: httpx.AsyncClient,
     delay: float,
     pages_crawled: dict,
-    active_workers: dict,
+    memory_queue: asyncio.Queue,
 ):
 
     async with session_factory() as session:
+        empty_attempts = 0
         while True:
             queue_item = await get_and_lock_queue_item(session, job.id)
             if queue_item is None:
-                active_workers["count"] -= 1
-                # waits for items or until all workers are idle
-                while active_workers["count"] > 0 and queue_item is None:
-                    await asyncio.sleep(0.5)
-                    queue_item = await get_and_lock_queue_item(session, job.id)
+                empty_attempts += 1
+                if empty_attempts >= 5:
+                    print(
+                        f"{name} has tried several times without finding work, exiting."
+                    )
+                    break  # Exit if we've tried several times without finding work
+                await asyncio.sleep(2.0)  # Wait before trying again
+                continue  # try again to get a queue item
 
-                if queue_item is None:
-                    break  # No more items and all workers idle, exit loop
-                else:
-                    active_workers["count"] += 1  # back to processing
+            empty_attempts = 0  # Reset empty attempts counter when we get work
             job_url = queue_item.url
             print(f"{name} processing: {job_url} at depth {queue_item.depth}")
 
@@ -120,20 +140,10 @@ async def worker(
                             if urlparse(link_url).netloc == job.domain
                         )
                     )
-                    await session.execute(
-                        insert(Queue).on_conflict_do_nothing(
-                            index_elements=["crawl_job_id", "url"]
-                        ),
-                        [
-                            {
-                                "url": link_url,
-                                "depth": new_depth,
-                                "status": "pending",
-                                "crawl_job_id": job.id,
-                            }
-                            for link_url in sorted_links
-                        ],
-                    )
+                    for link_url in sorted_links:
+                        memory_queue.put_nowait(
+                            (link_url, new_depth, "pending", job.id)
+                        )
                 else:
                     print(f"Max depth reached for {job_url}")
                 await session.commit()
@@ -198,11 +208,11 @@ async def run_crawl(
         },
     )
     pages_crawled = {"count": 0}
-    active_workers = {
-        "count": num_workers
-    }  # Track active workers for better concurrency handling
+    memory_queue = asyncio.Queue()  # In-memory queue for worker communication
 
-    tasks = [
+    producer_task = asyncio.create_task(producer(memory_queue, get_session_factory()))
+
+    worker_tasks = [
         asyncio.create_task(
             worker(
                 f"Worker-{i + 1}",
@@ -212,14 +222,16 @@ async def run_crawl(
                 async_client,
                 delay=delay,
                 pages_crawled=pages_crawled,
-                active_workers=active_workers,
+                memory_queue=memory_queue,
             )
         )
         for i in range(num_workers)  # Number of concurrent workers
     ]
 
-    await asyncio.gather(*tasks)
-
+    await asyncio.gather(*worker_tasks)
+    print(f"Memory queue size: {memory_queue.qsize()}")
+    await memory_queue.join()  # Ensure all items are process
+    producer_task.cancel()  # Stop the producer task
     await browser.close()
     await playwright.stop()
     await async_client.aclose()
