@@ -84,7 +84,7 @@ async def worker(
             queue_item = await get_and_lock_queue_item(session, job.id)
             if queue_item is None:
                 empty_attempts += 1
-                if empty_attempts >= 5:
+                if empty_attempts >= 25:
                     print(
                         f"{name} has tried several times without finding work, exiting."
                     )
