@@ -1,4 +1,3 @@
-from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from .models import CrawlJob, Queue
 from .robots import is_allowed
@@ -11,7 +10,6 @@ import asyncio
 import playwright.async_api as pw
 from .db import get_session_factory
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy import func
 
 
@@ -113,6 +111,7 @@ async def worker(
                 await save_links(session, page.id, links, urlparse(job_url).netloc)
                 new_depth = queue_item.depth + 1
                 queue_item.status = "completed"
+                session.add(queue_item)
                 if new_depth <= job.max_depth:
                     sorted_links = sorted(
                         set(
@@ -121,32 +120,22 @@ async def worker(
                             if urlparse(link_url).netloc == job.domain
                         )
                     )
-
-                    for link_url in sorted_links:
-                        for attempt in range(3):  # 3 tries
-                            try:
-                                stmt = (
-                                    insert(Queue)
-                                    .values(
-                                        url=link_url,
-                                        depth=new_depth,
-                                        status="pending",
-                                        crawl_job_id=job.id,
-                                    )
-                                    .on_conflict_do_nothing(
-                                        index_elements=["crawl_job_id", "url"]
-                                    )
-                                )
-                                await session.execute(stmt)
-                                break  # success, leaves retry loop
-                            except DBAPIError:
-                                await session.rollback()
-                                await asyncio.sleep(0.1 * attempt)  # backoff
-                                continue
-                    await session.commit()
+                    await session.execute(
+                        insert(Queue).on_conflict_do_nothing(
+                            index_elements=["crawl_job_id", "url"]
+                        ),
+                        [
+                            {
+                                "url": link_url,
+                                "depth": new_depth,
+                                "status": "pending",
+                                "crawl_job_id": job.id,
+                            }
+                            for link_url in sorted_links
+                        ],
+                    )
                 else:
                     print(f"Max depth reached for {job_url}")
-                session.add(queue_item)
                 await session.commit()
 
             except Exception as e:
